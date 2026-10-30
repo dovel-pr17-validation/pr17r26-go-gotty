@@ -1,0 +1,92 @@
+package server
+
+import (
+	"github.com/pkg/errors"
+)
+
+type Options struct {
+	Address             string `hcl:"address" flagName:"address" flagSName:"a" flagDescribe:"IP address(es) to listen (comma-separated for multiple)" default:"0.0.0.0"`
+	Port                string `hcl:"port" flagName:"port" flagSName:"p" flagDescribe:"Port number to liten" default:"8080"`
+	Path                string `hcl:"path" flagName:"path" flagSName:"m" flagDescribe:"Base path" default:"/"`
+	PermitWrite         bool   `hcl:"permit_write" flagName:"permit-write" flagSName:"w" flagDescribe:"Permit clients to write to the TTY (BE CAREFUL)" default:"false"`
+	EnableBasicAuth     bool   `hcl:"enable_basic_auth" default:"false"`
+	Credential          string `hcl:"credential" flagName:"credential" flagSName:"c" flagDescribe:"Credential for Basic Authentication (ex: user:pass, default disabled)" default:""`
+	EnableRandomUrl     bool   `hcl:"enable_random_url" flagName:"random-url" flagSName:"r" flagDescribe:"Add a random string to the URL" default:"false"`
+	RandomUrlLength     int    `hcl:"random_url_length" flagName:"random-url-length" flagDescribe:"Random URL length" default:"8"`
+	EnableTLS           bool   `hcl:"enable_tls" flagName:"tls" flagSName:"t" flagDescribe:"Enable TLS/SSL" default:"false"`
+	TLSCrtFile          string `hcl:"tls_crt_file" flagName:"tls-crt" flagDescribe:"TLS/SSL certificate file path" default:"~/.gotty.crt"`
+	TLSKeyFile          string `hcl:"tls_key_file" flagName:"tls-key" flagDescribe:"TLS/SSL key file path" default:"~/.gotty.key"`
+	EnableTLSClientAuth bool   `hcl:"enable_tls_client_auth" default:"false"`
+	TLSCACrtFile        string `hcl:"tls_ca_crt_file" flagName:"tls-ca-crt" flagDescribe:"TLS/SSL CA certificate file for client certifications" default:"~/.gotty.ca.crt"`
+	IndexFile           string `hcl:"index_file" flagName:"index" flagDescribe:"Custom index.html file" default:""`
+	TitleFormat         string `hcl:"title_format" flagName:"title-format" flagSName:"" flagDescribe:"Title format of browser window" default:"{{ .command }}@{{ .hostname }}"`
+	EnableReconnect     bool   `hcl:"enable_reconnect" flagName:"reconnect" flagDescribe:"Enable reconnection" default:"false"`
+	ReconnectTime       int    `hcl:"reconnect_time" flagName:"reconnect-time" flagDescribe:"Time to reconnect" default:"10"`
+	MaxConnection       int    `hcl:"max_connection" flagName:"max-connection" flagDescribe:"Maximum connection to gotty" default:"0"`
+	Once                bool   `hcl:"once" flagName:"once" flagDescribe:"Accept only one client and exit on disconnection" default:"false"`
+	Timeout             int    `hcl:"timeout" flagName:"timeout" flagDescribe:"Timeout seconds for waiting a client(0 to disable)" default:"0"`
+	PermitArguments     bool   `hcl:"permit_arguments" flagName:"permit-arguments" flagDescribe:"Permit clients to send command line arguments in URL (e.g. http://example.com:8080/?arg=AAA&arg=BBB)" default:"false"`
+	PassHeaders         bool   `hcl:"pass_headers" flagName:"pass-headers" flagDescribe:"Pass HTTP request headers as environment variables (e.g. Cookie becomes HTTP_COOKIE)" default:"false"`
+	Width               int    `hcl:"width" flagName:"width" flagDescribe:"Static width of the screen, 0(default) means dynamically resize" default:"0"`
+	Height              int    `hcl:"height" flagName:"height" flagDescribe:"Static height of the screen, 0(default) means dynamically resize" default:"0"`
+	WSOrigin            string `hcl:"ws_origin" flagName:"ws-origin" flagDescribe:"A regular expression that matches origin URLs to be accepted by WebSocket. No cross origin requests are acceptable by default" default:""`
+	WSQueryArgs         string `hcl:"ws_query_args" flagName:"ws-query-args" flagDescribe:"Querystring arguments to append to the websocket instantiation" default:""`
+	EnableWebGL         bool   `hcl:"enable_webgl" flagName:"enable-webgl" flagDescribe:"Enable WebGL renderer" default:"true"`
+	ConfirmClose        bool   `hcl:"confirm_close" flagName:"confirm-close" flagDescribe:"Ask the browser to confirm before closing/reloading the page while a session is connected" default:"true"`
+	MobileKeys          bool   `hcl:"mobile_keys" flagName:"mobile-keys" flagDescribe:"Show a strip of special keys (Esc, Ctrl, Alt, Tab, arrows, ...) above the on-screen keyboard on touch devices" default:"true"`
+	Quiet               bool   `hcl:"quiet" flagName:"quiet" flagDescribe:"Don't log" default:"false"`
+
+	TitleVariables map[string]interface{}
+
+	// Notify with RemoteAddr when client disconnects (optional)
+	ClientGoneCh chan<- string
+
+	// Rewrite the index template (optional)
+	IndexRewrite func(string) string
+
+	// Favicon specifies a custom favicon. Accepts a local file path (e.g.
+	// "/path/to/favicon.png"), an HTTP(S) URL, or a base64 data URI.
+	// A local file path is read at startup, converted to an inline data URI,
+	// and injected into the HTML template. Empty string (default) keeps the
+	// built-in favicon.ico / icon.svg.
+	Favicon string `hcl:"favicon" flagName:"favicon" flagDescribe:"Custom favicon (file path, URL, or data URI)" default:""`
+
+	// Terminal preferences — font, colors, cursor, theme, and palette.
+	// These are sent to the browser on each WebSocket connection.
+	// Users set them in the config file inside a `preferences { ... }` block.
+	Preferences *Preferences `hcl:"preferences"`
+
+	// PingInterval is the interval (in seconds) for WebSocket server-side ping/pong.
+	// The server sends a WebSocket Ping frame every PingInterval seconds.
+	// This keeps the connection alive through NAT/firewall idle timeouts even
+	// when the browser tab is in the background (where JS timers are throttled).
+	// Set to 0 to disable.
+	PingInterval int `hcl:"ping_interval" flagName:"ping-interval" flagSName:"" flagDescribe:"WebSocket server ping interval in seconds (0 to disable)" default:"30"`
+}
+
+// Preferences holds terminal color/font/cursor settings.
+// All fields are optional; nil-pointer fields are omitted when sent to the browser.
+// Users set these in their .gotty config under a `preferences` block.
+type Preferences struct {
+	Theme                 string   `hcl:"theme"`
+	FontSize              int      `hcl:"font_size"`
+	FontFamily            string   `hcl:"font_family"`
+	ForegroundColor       string   `hcl:"foreground_color"`
+	BackgroundColor       string   `hcl:"background_color"`
+	CursorColor           string   `hcl:"cursor_color"`
+	CursorAccent          string   `hcl:"cursor_accent"`
+	SelectionColor        string   `hcl:"selection_color"`
+	CursorStyle           string   `hcl:"cursor_style"`
+	CursorBlink           bool     `hcl:"cursor_blink"`
+	ScrollbackLines       int      `hcl:"scrollback_lines"`
+	EnableWebGL           bool     `hcl:"enable_webgl"`
+	AltIsMeta             bool     `hcl:"alt_is_meta"`
+	ColorPaletteOverrides []string `hcl:"color_palette_overrides"`
+}
+
+func (options *Options) Validate() error {
+	if options.EnableTLSClientAuth && !options.EnableTLS {
+		return errors.New("TLS client authentication is enabled, but TLS is not enabled")
+	}
+	return nil
+}

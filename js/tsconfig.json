@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+      "outDir": "./dist/",
+      "rootDir": "./src",
+      "jsx": "react-jsx",
+      "jsxImportSource": "preact",
+      "strictNullChecks": true,
+      "noUnusedLocals" : true,
+      "noImplicitThis": true,
+      "alwaysStrict": true,
+      "declaration": true,
+      "sourceMap": true,
+      "target": "esnext",
+      "module": "commonJS",
+      "ignoreDeprecations": "6.0",
+      "types": ["preact", "node"],
+      "paths": {
+          "*": ["./typings/*"]
+      }
+  },
+    "exclude": [
+    "node_modules",
+    "dist",
+    "e2e",
+    "vitest.config.mts",
+    "playwright.config.ts"
+  ]
+}
